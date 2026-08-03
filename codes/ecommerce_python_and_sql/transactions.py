@@ -99,15 +99,15 @@ def checkout(user_id: int, cart: dict) -> TxResult:
                 return TxResult(False, f"Invalid quantity for product {product_id}.")
 
             row = conn.execute(
-                ###
+                "SELECT * FROM products WHERE product_id = ?", (product_id,)
             ).fetchone()
 
             if row is None:
-                ###
+                conn.rollback()
                 return TxResult(False, f"Product {product_id} not found.")
 
             if row["stock"] < quantity:
-                ###
+                conn.rollback()
                 return TxResult(
                     False,
                     f"Insufficient stock for '{row['name']}' "
@@ -124,20 +124,21 @@ def checkout(user_id: int, cart: dict) -> TxResult:
         # Step 3 – deduct stock
         for item in items:
             conn.execute(
-                ###
+                "UPDATE products SET stock = stock - ? WHERE product_id = ?",
+    (item["quantity"], item["product_id"])
             )
 
         # Step 4 – check card balance
         card = conn.execute(
-            ###
+            "SELECT * FROM cards WHERE user_id = ?", (user_id,)
         ).fetchone()
 
         if card is None:
-            ###
+            conn.rollback()
             return TxResult(False, "No payment card found for this user.")
 
         if card["balance"] < total:
-            ###
+            conn.rollback()
             return TxResult(
                 False,
                 f"Insufficient funds. Total £{total:.2f}, "
@@ -146,21 +147,27 @@ def checkout(user_id: int, cart: dict) -> TxResult:
 
         # Step 5 – deduct balance
         conn.execute(
-            ###
+            "UPDATE cards SET balance = balance - ? WHERE user_id = ?",
+    (total, user_id)
         )
 
         # Step 6 – create order
         cursor = conn.execute(
-            ###
-        )
+            
+        "INSERT INTO orders (user_id, total, status) VALUES (?, ?, ?)",
+    (user_id, total, "paid")
+    )
         order_id = cursor.lastrowid
 
         # Step 7 – create order items
         for item in items:
             conn.execute(
-                ###
+        
+        "INSERT INTO order_items (order_id, product_id, quantity, unit_price) "
+        "VALUES (?, ?, ?, ?)",
+        (order_id, item["product_id"], item["quantity"], item["unit_price"])
             )
-
+            
         conn.commit()
         return TxResult(
             True,
@@ -213,47 +220,50 @@ def refund_order(user_id: int, order_id: int) -> TxResult:
 
     conn = get_connection()
     try:
-        ###
+        conn.execute("BEGIN")
 
         # Step 1 – fetch and verify order ownership
         order = conn.execute(
-            ###
+            "SELECT * FROM orders WHERE order_id = ?", (order_id,)
         ).fetchone()
 
         if order is None:
-            ###
+            conn.rollback()
             return TxResult(False, f"Order #{order_id} not found.")
 
         if order["user_id"] != user_id:
-            ###
+            conn.rollback()
             return TxResult(False, "You do not own this order.")
 
         # Step 2 – must be 'paid' to refund
         if order["status"] != "paid":
-            ###
+            conn.rollback()
             return TxResult(False, f"Order #{order_id} cannot be refunded (status: {order['status']}).")
 
         # Step 3 – restore stock for each item
         items = conn.execute(
-            ###
+            "SELECT * FROM order_items WHERE order_id = ?", (order_id,)
         ).fetchall()
 
         for item in items:
             conn.execute(
-                ###
+                "UPDATE products SET stock = stock + ? WHERE product_id = ?",
+        (item["quantity"], item["product_id"])
             )
 
         # Step 4 – refund to card
         conn.execute(
-            ###
+            "UPDATE cards SET balance = balance + ? WHERE user_id = ?",
+    (order["total"], user_id)
         )
 
         # Step 5 – mark as refunded
         conn.execute(
-            ###
+            "UPDATE orders SET status = ? WHERE order_id = ?",
+    ("refunded", order_id)
         )
 
-        ###
+        conn.commit()
         return TxResult(
             True,
             f"Order #{order_id} refunded. £{order['total']:.2f} returned to your card."
@@ -296,3 +306,4 @@ if __name__ == "__main__":
         assert result4.success, "Expected success for valid refund"
 
     print("\nAll self-tests passed ✓")
+

@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE TABLE IF NOT EXISTS users (
     user_id      INTEGER PRIMARY KEY AUTOINCREMENT,
     username     TEXT    NOT NULL UNIQUE,
-    email        TEXT    NOT NULL UNIQUE
+    email        TEXT    NOT NULL UNIQUES
 );
 
 CREATE TABLE IF NOT EXISTS cards (
@@ -47,7 +47,16 @@ CREATE TABLE IF NOT EXISTS cards (
 -- TODO: Write the CREATE TABLE statement for "orders" below.
 
 -- <your SQL here>
+CREATE TABLE IF NOT EXISTS orders (
+    order_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL,
+    total      REAL NOT NULL CHECK (total >= 0),
+    status     TEXT NOT NULL DEFAULT 'pending'
+               CHECK (status IN ('pending', 'paid', 'failed', 'refunded')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
 
 -- ----------------------------------------------------------------
 -- SECTION 3: TODO – design the order_items table
@@ -62,7 +71,16 @@ CREATE TABLE IF NOT EXISTS cards (
 -- TODO: Write the CREATE TABLE statement for "order_items" below.
 
 -- <your SQL here>
+CREATE TABLE IF NOT EXISTS order_items (
+    item_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id    INTEGER NOT NULL,
+    product_id  INTEGER NOT NULL,
+    quantity    INTEGER NOT NULL CHECK (quantity > 0),
+    unit_price  REAL NOT NULL CHECK (unit_price >= 0),
 
+    FOREIGN KEY (order_id) REFERENCES orders(order_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+);
 
 -- ----------------------------------------------------------------
 -- SECTION 4: TODO – useful indexes
@@ -74,7 +92,11 @@ CREATE TABLE IF NOT EXISTS cards (
 
 -- <your SQL here>
 
+CREATE INDEX idx_orders_user
+ON orders(user_id);
 
+CREATE INDEX idx_order_items_order
+ON order_items(order_id);
 -- ----------------------------------------------------------------
 -- SECTION 5: Seed data (PROVIDED – do not edit)
 -- ----------------------------------------------------------------
