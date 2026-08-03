@@ -2,7 +2,7 @@
 --  Q1.2 — الـ View: DEPT_SUMMARY
 -- ============================================================
 
-CREATE VIEW DEPT_SUMMARY (D, C, Total_s, Average_s) AS
+CREATE VIEW IF NOT EXISTS DEPT_SUMMARY (D, C, Total_s, Average_s) AS
 SELECT Dno, COUNT(*), SUM(Salary), AVG(Salary)
 FROM EMPLOYEE
 GROUP BY Dno;
